@@ -1,0 +1,3 @@
+user1@server1.com title:production option:LC_ALL=en_US.UTF-8
+user2@server2.com title:staging option:TERM=xterm-256color
+user1@server3.com title:database rc:"LC_ALL=en_US.UTF-8 screen -D -RR -h 20000"
