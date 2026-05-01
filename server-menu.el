@@ -22,6 +22,11 @@
 (defvar ssh-servers-file (expand-file-name "~/.config/server-menu.txt")
   "Path to the file containing the list of servers.")
 
+(defvar server-menu-terminal (lambda () "gnome-terminal")
+  "Function or string returning the terminal emulator to use.
+Defaults to gnome-terminal. If it is a function, it will be called.
+Expected to return a command name that is executable.")
+
 (defun ssh-servers-read-file ()
   "Read the list of servers from the file.
 Each line format: \\='username@hostname title:host1 option:KEY=VALUE rc:\"command\"\\='"
@@ -57,46 +62,48 @@ Each line format: \\='username@hostname title:host1 option:KEY=VALUE rc:\"comman
                                     servers))
          (debug-buffer (get-buffer-create "*server-menu*")))
     (when selected-server
-      (let* ((connection (car selected-server))
-             (options (nth 2 selected-server))
-             (rc (nth 3 selected-server))
-             (ssh-command (cond
-                           ;; Both options and rc
-                           ((and options rc)
-                            (format "env %s ssh %s -t '%s'" options connection rc))
-                           ;; Only rc
-                           (rc
-                            (format "ssh %s -t '%s'" connection rc))
-                           ;; Only options
-                           (options
-                            (format "env %s ssh %s" options connection))
-                           ;; Neither
-                           (t
-                            (format "ssh %s" connection)))))
-        (with-current-buffer debug-buffer
-          (goto-char (point-max))
-          (insert (format "Selected server: %s\n" selected-server))
-          (insert (format "Executing command: %s\n" ssh-command))
-          (cond
-           ((executable-find "gnome-terminal")
-            (with-current-buffer debug-buffer
-              (goto-char (point-max))
-              (insert "Starting process with gnome-terminal...\n"))
+(let* ((connection (car selected-server))
+       (options (nth 2 selected-server))
+       (rc (nth 3 selected-server))
+       (terminal (if (functionp server-menu-terminal)
+                     (funcall server-menu-terminal)
+                   server-menu-terminal))
+       (ssh-command (cond
+                    ;; Both options and rc
+                    ((and options rc)
+                     (format "env %s ssh %s -t '%s'" options connection rc))
+                    ;; Only rc
+                    (rc
+                     (format "ssh %s -t '%s'" connection rc))
+                    ;; Only options
+                    (options
+                     (format "env %s ssh %s" options connection))
+                    ;; Neither
+                    (t
+                     (format "ssh %s" connection)))))
+  (with-current-buffer debug-buffer
+    (goto-char (point-max))
+    (insert (format "Selected server: %s\n" selected-server))
+    (insert (format "Executing command: %s\n" ssh-command))
+    (cond
+     ((and terminal (executable-find terminal))
+      (cond
+       ((string= terminal "gnome-terminal")
+        (start-process "ssh" debug-buffer "gnome-terminal" "-p" "-v" "--" "bash" "-c" ssh-command))
+       ((string= terminal "konsole")
+        (start-process "ssh" nil "konsole" "-e" "bash" "-c" ssh-command))
+       ((string= terminal "xterm")
+        (start-process "ssh" nil "xterm" "-e" "bash" "-c" ssh-command))
+        (t (start-process "ssh" nil terminal "-e" "bash" "-c" (format "TERM=xterm-256color %s" ssh-command)))))
 
-            ;; (start-process "ssh" debug-buffer "gnome-terminal" "-p" "-v" "--" "bash" "-l" "-c" "ls -1"))
-            ;; (start-process "ssh" debug-buffer "bash" "-c" "gnome-terminal"))
-            ;; (start-process "ssh" debug-buffer "bash" "-c" "gnome-terminal" "-p"))
-            ;; (start-process "ssh" debug-buffer "bash" "-c" "env"))
-            ;; (start-process-shell-command "ssh" debug-buffer "gnome-terminal"))
+     ((executable-find "gnome-terminal")
+      (start-process "ssh" debug-buffer "gnome-terminal" "-p" "-v" "--" "bash" "-c" ssh-command))
+     ((executable-find "konsole")
+      (start-process "ssh" nil "konsole" "-e" "bash" "-c" ssh-command))
+     ((executable-find "xterm")
+      (start-process "ssh" nil "xterm" "-e" "bash" "-c" ssh-command))
+     (t (error "No suitable terminal emulator found"))))))))
 
-            ;; (start-process "ssh" debug-buffer "gnome-terminal" "--no-environment" "--display=:0" "-p" "-v" "--" "bash" "-l" "-c" "ls -1"))
-           (start-process "ssh" debug-buffer "gnome-terminal" "-p" "-v" "--" "bash" "-c" ssh-command))
-           ;; (start-process "ssh" debug-buffer "gnome-terminal" "-v" "--" "bash" "-l" "-c" (format "\"%s\"" ssh-command)))
-           ((executable-find "konsole")
-            (start-process "ssh" nil "konsole" "-e" "bash" "-c" ssh-command))
-           ((executable-find "xterm")
-            (start-process "ssh" nil "xterm" "-e" "bash" "-c" ssh-command))
-           (t (error "No suitable terminal emulator found"))))))))
 
 (provide 'server-menu)
 ;;; server-menu.el ends here

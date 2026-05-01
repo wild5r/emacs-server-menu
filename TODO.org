@@ -1,0 +1,6 @@
+#+title: Todo
+
+* TODO allows configure terminal app
+* TODO detect default terminal app
+
+
